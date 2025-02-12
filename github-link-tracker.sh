@@ -56,11 +56,13 @@ read_input() {
     local prompt="$1"
     local var_name="$2"
     local required="$3"
+    local value
 
     while true; do
-        read -p "$prompt" value
+        read -r -p "$prompt" value
         if [ -n "$value" ] || [ "$required" != "required" ]; then
-            eval "$var_name='$value'"
+            # Use printf to properly handle special characters
+            printf -v "$var_name" "%s" "$value"
             break
         else
             echo "This field is required. Please enter a value."
@@ -75,7 +77,15 @@ read_input "Enter description (optional): " description
 
 # Handle label selection and creation
 echo -e "\nExisting labels:"
-mapfile -t labels < <(get_labels)
+# Store labels in an array using a while loop instead of mapfile
+readarray -t labels < <(get_labels) || {
+    # Fallback method if readarray is not available
+    i=0
+    while IFS= read -r line; do
+        labels[i++]="$line"
+    done < <(get_labels)
+}
+
 for i in "${!labels[@]}"; do
     echo "[$((i+1))] ${labels[$i]}"
 done
