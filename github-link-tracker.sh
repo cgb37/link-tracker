@@ -102,10 +102,15 @@ while true; do
 
     for num in $selection; do
         if [ "$num" = "0" ]; then
-            read -p "Enter new label name: " new_label
-            if create_label "$new_label"; then
-                selected_labels+=("$new_label")
-            fi
+            read -p "Enter new label name(s) (separate multiple labels with commas): " new_labels
+            IFS=',' read -ra label_array <<< "$new_labels"
+            for new_label in "${label_array[@]}"; do
+                # Trim whitespace from label
+                new_label=$(echo "$new_label" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+                if [ -n "$new_label" ] && create_label "$new_label"; then
+                    selected_labels+=("$new_label")
+                fi
+            done
         elif [ "$num" -ge 1 ] && [ "$num" -le "${#labels[@]}" ]; then
             label="${labels[$((num-1))]}"
             if [[ ! " ${selected_labels[@]} " =~ " ${label} " ]]; then
