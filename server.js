@@ -25,9 +25,13 @@ const GITHUB_OWNER = process.env.GITHUB_OWNER;
 const GITHUB_REPO = process.env.GITHUB_REPO;
 const GITHUB_API = process.env.GITHUB_API || 'https://api.github.com';
 
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
 // Diagnostic logging for .env loading
 logToFile('startup.log', `process.cwd()=${process.cwd()}`);
-logToFile('startup.log', `Expected .env path=${path.join(process.cwd(), '.env')}`);
+logToFile('startup.log', `__dirname=${__dirname}`);
+logToFile('startup.log', `Actual .env path=${path.join(__dirname, '.env')}`);
+logToFile('startup.log', `Does .env file exist? ${fs.existsSync(path.join(__dirname, '.env'))}`);
 
 // Log environment variables (except token) at startup
 logToFile('startup.log', `GITHUB_OWNER=${GITHUB_OWNER}`);
@@ -304,17 +308,40 @@ app.get('/', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-    console.log(`\n🔗 GitHub Link Tracker UI running at http://localhost:${PORT}`);
-    console.log(`📚 Access your bookmarks in your browser`);
-    console.log(`🔄 Issues are cached for 5 minutes - use refresh button to update\n`);
-    
-    // Initial fetch
-    fetchIssues().catch(err => {
-        console.error('Initial fetch failed:', err.message);
-        console.log('Will retry when API is called\n');
+(async () => {
+    // Check required environment variables
+    if (!GITHUB_OWNER || !GITHUB_REPO) {
+        const errorMsg = 'Error: GITHUB_OWNER and GITHUB_REPO must be set in .env file';
+        console.error(errorMsg);
+        logToFile('startup.log', errorMsg);
+        process.exit(1);
+    }
+
+    // Verify repository
+    try {
+        console.log(`Verifying GitHub repository: ${GITHUB_OWNER}/${GITHUB_REPO}`);
+        await githubRequest(`/repos/${GITHUB_OWNER}/${GITHUB_REPO}`);
+        console.log(`✅ Repository verification successful: ${GITHUB_OWNER}/${GITHUB_REPO}`);
+        logToFile('startup.log', `Repository verification successful: ${GITHUB_OWNER}/${GITHUB_REPO}`);
+    } catch (error) {
+        const errorMsg = `❌ Repository verification failed for ${GITHUB_OWNER}/${GITHUB_REPO}: ${error.message}`;
+        console.error(errorMsg);
+        logToFile('startup.log', errorMsg);
+        process.exit(1);
+    }
+
+    app.listen(PORT, () => {
+        console.log(`\n🔗 GitHub Link Tracker UI running at http://localhost:${PORT}`);
+        console.log(`📚 Access your bookmarks in your browser`);
+        console.log(`🔄 Issues are cached for 5 minutes - use refresh button to update\n`);
+        
+        // Initial fetch
+        fetchIssues().catch(err => {
+            console.error('Initial fetch failed:', err.message);
+            console.log('Will retry when API is called\n');
+        });
     });
-});
+})();
 
 // Graceful shutdown
 process.on('SIGINT', () => {
