@@ -5,7 +5,17 @@ const fetch = require('node-fetch');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
-require('dotenv').config();
+const LOG_DIR = path.join(__dirname, 'logs');
+if (!fs.existsSync(LOG_DIR)) {
+    fs.mkdirSync(LOG_DIR);
+}
+
+function logToFile(filename, data) {
+    const filePath = path.join(LOG_DIR, filename);
+    const timestamp = new Date().toISOString();
+    fs.appendFileSync(filePath, `[${timestamp}] ${data}\n`);
+}
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 const PORT = 3333;
@@ -14,6 +24,15 @@ const PORT = 3333;
 const GITHUB_OWNER = process.env.GITHUB_OWNER;
 const GITHUB_REPO = process.env.GITHUB_REPO;
 const GITHUB_API = process.env.GITHUB_API || 'https://api.github.com';
+
+// Diagnostic logging for .env loading
+logToFile('startup.log', `process.cwd()=${process.cwd()}`);
+logToFile('startup.log', `Expected .env path=${path.join(process.cwd(), '.env')}`);
+
+// Log environment variables (except token) at startup
+logToFile('startup.log', `GITHUB_OWNER=${GITHUB_OWNER}`);
+logToFile('startup.log', `GITHUB_REPO=${GITHUB_REPO}`);
+logToFile('startup.log', `GITHUB_API=${GITHUB_API}`);
 
 // Middleware
 app.use(cors());
@@ -41,7 +60,11 @@ function getGitHubToken() {
 async function githubRequest(endpoint, options = {}) {
     const token = getGitHubToken();
     const url = `${GITHUB_API}${endpoint}`;
-    
+    // Log request details
+    logToFile('requests.log', `REQUEST: ${options.method || 'GET'} ${url}`);
+    if (options.body) {
+        logToFile('requests.log', `BODY: ${options.body}`);
+    }
     const response = await fetch(url, {
         headers: {
             'Authorization': `token ${token}`,
@@ -53,8 +76,12 @@ async function githubRequest(endpoint, options = {}) {
     });
 
     if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`GitHub API error: ${response.status} ${error}`);
+        const errorText = await response.text();
+        logToFile('errors.log', `ERROR: ${response.status} ${url} RESPONSE: ${errorText}`);
+        throw new Error(`GitHub API error: ${response.status} ${errorText}`);
+    } else {
+        // Log successful response (only status and url for brevity)
+        logToFile('responses.log', `RESPONSE: ${response.status} ${url}`);
     }
 
     return response.json();
