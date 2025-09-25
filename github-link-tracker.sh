@@ -1,9 +1,28 @@
 #!/bin/bash
 
 # GitHub repository details
-GITHUB_OWNER="cgb37"
-GITHUB_REPO="link-tracker"
-GITHUB_API="https://api.github.com"
+GITHUB_OWNER="$GITHUB_OWNER"
+GITHUB_REPO="$GITHUB_REPO"
+GITHUB_API="$GITHUB_API"
+
+# Check if required environment variables are set
+if [ -z "$GITHUB_OWNER" ]; then
+    echo "Error: GITHUB_OWNER environment variable is not set"
+    echo "Please define it in your .env file"
+    exit 1
+fi
+
+if [ -z "$GITHUB_REPO" ]; then
+    echo "Error: GITHUB_REPO environment variable is not set"
+    echo "Please define it in your .env file"
+    exit 1
+fi
+
+if [ -z "$GITHUB_API" ]; then
+    echo "Error: GITHUB_API environment variable is not set"
+    echo "Please define it in your .env file"
+    exit 1
+fi
 
 # Check if jq is installed
 if ! command -v jq &> /dev/null; then
