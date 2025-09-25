@@ -13,11 +13,43 @@ A local web interface for organizing and managing bookmarks stored as GitHub iss
 - 🔄 **Manual Sync**: Refresh data from GitHub on demand
 - 🌐 **Global CLI**: Run from anywhere on your system
 
+## Repository Separation: Code vs Data
+
+This application separates the **codebase** (this repository) from your **data** (bookmarks and tags). This allows you to:
+
+- **Share the app**: Let others use their own data repositories
+- **Version control**: Keep code and data changes separate
+- **Backup & migrate**: Easily move your data between repositories
+- **Multi-user**: Each user can have their own data repo
+
+### For New Users
+
+1. Create a new GitHub repository for your data (e.g., `yourusername/link-data`)
+2. Configure the app to use your data repository (see Configuration below)
+3. Start adding bookmarks!
+
+### For Existing Users (Migration)
+
+If you have existing bookmarks in the original `cgb37/link-tracker` repository:
+
+1. Create a new data repository
+2. Run the migration script:
+   ```bash
+   # Set your target repository
+   export TARGET_GITHUB_REPO=your-new-data-repo
+   
+   # Run migration
+   node migrate-data.js
+   ```
+3. Update your `.env` file to point to the new data repository
+4. Test that everything works
+5. Optionally, close or archive the old issues
+
 ## Prerequisites
 
 - Node.js 14+ installed
 - A GitHub personal access token with repo access
-- The original link-tracker repository (`cgb37/link-tracker`)
+- A GitHub repository for storing your bookmark data
 
 ## Installation
 
@@ -98,13 +130,69 @@ Once started, open your browser to `http://localhost:3333`
 
 ### Environment Variables
 
-- `GITHUB_TOKEN`: Your GitHub personal access token (required)
+Create a `.env` file in the project root (copy from `.env.example`):
 
-### Default Settings
+```bash
+# Your GitHub personal access token
+GITHUB_TOKEN=your_personal_access_token
 
-- **Port**: 3333 (chosen to avoid conflicts with common dev ports)
-- **Repository**: `cgb37/link-tracker`
-- **Cache Duration**: 5 minutes
+# Data repository (where your bookmarks are stored)
+GITHUB_OWNER=your-github-username
+GITHUB_REPO=your-data-repository-name
+
+# GitHub API endpoint (usually no need to change)
+GITHUB_API=https://api.github.com
+```
+
+### Migration Variables (for existing users)
+
+When migrating from the original repository:
+
+```bash
+# Set these temporarily for migration
+TARGET_GITHUB_OWNER=your-github-username  # Usually same as GITHUB_OWNER
+TARGET_GITHUB_REPO=your-new-data-repo-name
+```
+
+## Data Migration
+
+For users migrating from the original setup where data was stored in the same repository as the code:
+
+### Step 1: Create a Data Repository
+
+Create a new GitHub repository to store your bookmark data. This can be:
+- A public repository (if you want to share your bookmarks)
+- A private repository (for personal use)
+- Named anything you like (e.g., `bookmarks`, `link-data`, `my-links`)
+
+### Step 2: Run Migration
+
+```bash
+# Set your target repository details
+export TARGET_GITHUB_REPO=your-new-data-repo-name
+export TARGET_GITHUB_OWNER=your-github-username  # Optional, defaults to GITHUB_OWNER
+
+# Run the migration script
+node migrate-data.js
+```
+
+The script will:
+- Copy all your existing issues (bookmarks) to the new repository
+- Copy all your existing labels (tags) to the new repository
+- Optionally close the original issues (you'll be prompted)
+
+### Step 3: Update Configuration
+
+Update your `.env` file to use the new data repository:
+
+```bash
+GITHUB_OWNER=your-github-username
+GITHUB_REPO=your-new-data-repo-name
+```
+
+### Step 4: Test
+
+Restart the server and verify your bookmarks appear correctly.
 
 ## API Endpoints
 
@@ -121,13 +209,17 @@ The server provides a REST API:
 ## Project Structure
 
 ```
-github-link-tracker-ui/
+link-tracker/
 ├── package.json          # Dependencies and scripts
 ├── server.js             # Express server and API
+├── migrate-data.js       # Data migration script
+├── github-link-tracker.sh # CLI script for creating bookmarks
+├── .env.example          # Environment configuration template
 ├── bin/
 │   └── cli.js           # Global CLI tool
-└── public/
-    └── index.html       # Web interface
+├── public/
+│   └── index.html       # Web interface
+└── logs/                 # Application logs
 ```
 
 ## Development
@@ -172,9 +264,10 @@ lsof -ti:3333 | xargs kill
 ```
 
 **"No bookmarks found"**
-- Make sure you have issues in your `cgb37/link-tracker` repository
+- Make sure you have issues in your configured data repository
 - Try clicking the "Refresh" button
 - Check that your GitHub token has repo access
+- Verify your `GITHUB_OWNER` and `GITHUB_REPO` are set correctly
 
 **"Failed to fetch bookmarks"**
 - Verify your GitHub token is correct
