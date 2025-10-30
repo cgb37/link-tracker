@@ -48,6 +48,11 @@ let issuesCache = [];
 let lastFetch = 0;
 const CACHE_DURATION = 8 * 60 * 60 * 1000; // 8 hours
 
+// Cache for labels
+let labelsCache = [];
+let labelsLastFetch = 0;
+const LABELS_CACHE_DURATION = 8 * 60 * 60 * 1000; // 8 hours
+
 // Helper function to get GitHub token
 function getGitHubToken() {
     const token = process.env.GITHUB_TOKEN;
@@ -148,6 +153,36 @@ async function fetchIssues(forceRefresh = false) {
     }
 }
 
+// Fetch all labels with pagination and caching
+async function fetchAllLabels(forceRefresh = false) {
+    const now = Date.now();
+    if (!forceRefresh && labelsCache.length > 0 && (now - labelsLastFetch) < LABELS_CACHE_DURATION) {
+        return labelsCache;
+    }
+
+    try {
+        let allLabels = [];
+        let page = 1;
+        while (true) {
+            const endpoint = `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/labels?per_page=100&page=${page}`;
+            const pageLabels = await githubRequest(endpoint);
+            if (!Array.isArray(pageLabels) || pageLabels.length === 0) {
+                break;
+            }
+            allLabels = allLabels.concat(pageLabels.map(l => ({ name: l.name, color: l.color })));
+            if (pageLabels.length < 100) break; // last page
+            page += 1;
+        }
+
+        labelsCache = allLabels;
+        labelsLastFetch = now;
+        return labelsCache;
+    } catch (err) {
+        console.error('Error fetching labels:', err.message);
+        return labelsCache; // return cached if available
+    }
+}
+
 // API Routes
 
 // Get all bookmarks
@@ -173,8 +208,9 @@ app.post('/api/bookmarks/refresh', async (req, res) => {
 // Get available labels
 app.get('/api/labels', async (req, res) => {
     try {
-        const labels = await githubRequest(`/repos/${GITHUB_OWNER}/${GITHUB_REPO}/labels`);
-        res.json(labels.map(label => ({ name: label.name, color: label.color })));
+        const force = req.query.force === 'true';
+        const labels = await fetchAllLabels(force);
+        res.json(labels);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -295,6 +331,18 @@ app.post('/api/labels', async (req, res) => {
             method: 'POST',
             body: JSON.stringify(labelData)
         });
+
+        // Update in-memory labels cache so UI sees the new label immediately
+        try {
+            // Remove any existing entry with the same name
+            labelsCache = labelsCache.filter(l => l.name !== newLabel.name);
+            // Prepend the new label
+            labelsCache.unshift({ name: newLabel.name, color: newLabel.color });
+            labelsLastFetch = Date.now();
+        } catch (cacheErr) {
+            // If cache manipulation fails, log but continue
+            console.error('Failed to update labels cache:', cacheErr.message);
+        }
 
         res.status(201).json({ name: newLabel.name, color: newLabel.color });
     } catch (error) {
