@@ -3,7 +3,7 @@
 # GitHub repository details
 GITHUB_OWNER="$GITHUB_OWNER"
 GITHUB_REPO="$GITHUB_REPO"
-GITHUB_API="$GITHUB_API"
+SERVER_URL="${SERVER_URL:-http://localhost:3333}"
 
 # Check if required environment variables are set
 if [ -z "$GITHUB_OWNER" ]; then
@@ -18,11 +18,6 @@ if [ -z "$GITHUB_REPO" ]; then
     exit 1
 fi
 
-if [ -z "$GITHUB_API" ]; then
-    echo "Error: GITHUB_API environment variable is not set"
-    echo "Please define it in your .env file"
-    exit 1
-fi
 
 # Check if jq is installed
 if ! command -v jq &> /dev/null; then
@@ -32,31 +27,27 @@ if ! command -v jq &> /dev/null; then
     exit 1
 fi
 
-# Check if GitHub token is set
-if [ -z "$GITHUB_TOKEN" ]; then
-    echo "Error: GITHUB_TOKEN environment variable is not set"
-    echo "Please create a personal access token at https://github.com/settings/tokens"
-    echo "Then set it with: export GITHUB_TOKEN=your_token_here"
-    exit 1
-fi
+# Note: This CLI is server-only and requires the local web server to be running.
+# It will POST to $SERVER_URL/api/bookmarks and use the server for label management.
 
 # Function to create a new label
 create_label() {
     local label="$1"
     local color="$(printf '%06x\n' $(($RANDOM % 16777215)))"  # Random color
 
-    echo "Creating label '$label'..."
-    response=$(curl -s -X POST "$GITHUB_API/repos/$GITHUB_OWNER/$GITHUB_REPO/labels" \
-        -H "Authorization: token $GITHUB_TOKEN" \
-        -H "Accept: application/vnd.github.v3+json" \
+    echo "Creating label '$label' via server $SERVER_URL..."
+    response=$(curl -s --max-time 10 -S -f -X POST "$SERVER_URL/api/labels" \
         -H "Content-Type: application/json" \
-        -d "{\"name\":\"$label\",\"color\":\"$color\"}")
+        -d "{\"name\":\"$label\",\"color\":\"$color\"}") || {
+        echo "Error: Unable to reach server at $SERVER_URL. Make sure the web server is running." >&2
+        return 1
+    }
 
     if echo "$response" | jq -e .name > /dev/null; then
         echo "Label '$label' created successfully"
         return 0
     else
-        echo "Error creating label:"
+        echo "Error creating label (server response):"
         echo "$response" | jq '.'
         return 1
     fi
@@ -64,10 +55,14 @@ create_label() {
 
 # Function to get existing labels
 get_labels() {
-    curl -s -X GET "$GITHUB_API/repos/$GITHUB_OWNER/$GITHUB_REPO/labels" \
-        -H "Authorization: token $GITHUB_TOKEN" \
-        -H "Accept: application/vnd.github.v3+json" | \
-        jq -r '.[].name'
+    # Prefer the server endpoint which already implements pagination and caching
+    response=$(curl -s --max-time 5 -S -f "$SERVER_URL/api/labels") || {
+        echo "Error: Unable to reach server at $SERVER_URL. Start the server and try again." >&2
+        return 1
+    }
+
+    # Output one label name per line
+    echo "$response" | jq -r '.[].name'
 }
 
 # Function to read user input
@@ -167,19 +162,21 @@ json_payload=$(jq -n \
         labels: $labels
     }')
 
-# Create the issue using GitHub API
-response=$(curl -s -X POST "$GITHUB_API/repos/$GITHUB_OWNER/$GITHUB_REPO/issues" \
-    -H "Authorization: token $GITHUB_TOKEN" \
-    -H "Accept: application/vnd.github.v3+json" \
+# Create the bookmark via the local server
+response=$(curl -s --max-time 10 -S -f -X POST "$SERVER_URL/api/bookmarks" \
     -H "Content-Type: application/json" \
-    -d "$json_payload")
+    -d "$json_payload") || {
+    echo -e "\nError: Unable to reach server at $SERVER_URL. Make sure the server is running and try again." >&2
+    exit 1
+}
 
-# Check if issue was created successfully
-if echo "$response" | jq -e .number > /dev/null; then
-    issue_number=$(echo "$response" | jq .number)
-    echo -e "\nSuccess! Issue #$issue_number created"
+# Check if bookmark was created successfully (server returns bookmark with id)
+if echo "$response" | jq -e .id > /dev/null; then
+    issue_number=$(echo "$response" | jq .id)
+    echo -e "\nSuccess! Bookmark (issue) #$issue_number created"
     echo "View it at: https://github.com/$GITHUB_OWNER/$GITHUB_REPO/issues/$issue_number"
 else
-    echo -e "\nError creating issue:"
+    echo -e "\nError creating bookmark:"
     echo "$response" | jq '.'
+    exit 1
 fi
