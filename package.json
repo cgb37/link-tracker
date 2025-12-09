@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js --dev",
-    "stop": "pkill -f 'node.*server.js' || echo 'No running instances found'",
+    "stop": "lsof -ti:3333 | xargs kill || echo 'No running instances found'",
     "restart": "npm run stop && sleep 1 && npm start",
     "migrate": "node migrate-data.js"
   },

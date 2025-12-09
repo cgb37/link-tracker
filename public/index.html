@@ -812,13 +812,13 @@
             let filtered = bookmarks.filter(bookmark => {
                 // Search filter
                 if (searchQuery) {
-                    const searchText = `${bookmark.title} ${bookmark.description} ${bookmark.link} ${bookmark.tags.join(' ')}`.toLowerCase();
+                    const searchText = `${bookmark.title} ${bookmark.description} ${bookmark.link} ${bookmark.tags.map(t => t.name).join(' ')}`.toLowerCase();
                     if (!searchText.includes(searchQuery)) return false;
                 }
                 
                 // Tag filter
                 if (activeTags.size > 0) {
-                    const hasActiveTag = bookmark.tags.some(tag => activeTags.has(tag));
+                    const hasActiveTag = bookmark.tags.some(tag => activeTags.has(tag.name));
                     if (!hasActiveTag) return false;
                 }
                 
@@ -846,9 +846,8 @@
                     
                     <div class="bookmark-tags">
                         ${bookmark.tags.map(tag => {
-                            const tagData = allTags.find(t => t.name === tag);
-                            const color = tagData ? tagData.color : '666666';
-                            return `<span class="tag" style="background-color: #${color}; color: ${getContrastColor(color)}">${escapeHtml(tag)}</span>`;
+                            const color = tag.color || '666666';
+                            return `<span class="tag" style="background-color: #${color}; color: ${getContrastColor(color)}">${escapeHtml(tag.name)}</span>`;
                         }).join('')}
                     </div>
                     
@@ -870,7 +869,14 @@
         // Render filter tags with improved highlighting
         function renderFilterTags() {
             const container = document.getElementById('filterTags');
-            const usedTags = [...new Set(bookmarks.flatMap(b => b.tags))].sort();
+            
+            const usedTagsMap = new Map();
+            bookmarks.flatMap(b => b.tags).forEach(tag => {
+                if (!usedTagsMap.has(tag.name)) {
+                    usedTagsMap.set(tag.name, tag);
+                }
+            });
+            const usedTags = Array.from(usedTagsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
             
             if (usedTags.length === 0) {
                 container.innerHTML = '<span style="color: #586069;">No tags available</span>';
@@ -878,17 +884,16 @@
             }
 
             container.innerHTML = usedTags.map(tag => {
-                const tagData = allTags.find(t => t.name === tag);
-                const color = tagData ? tagData.color : '666666';
-                const isActive = activeTags.has(tag);
+                const color = tag.color || '666666';
+                const isActive = activeTags.has(tag.name);
                 
                 return `
                     <span class="tag ${isActive ? 'active' : ''}" 
                           style="background-color: #${color}; color: ${getContrastColor(color)}"
-                          onclick="toggleTagFilter('${escapeAttribute(tag)}')"
-                          data-tag="${escapeAttribute(tag)}"
+                          onclick="toggleTagFilter('${escapeAttribute(tag.name)}')"
+                          data-tag="${escapeAttribute(tag.name)}"
                           title="${isActive ? 'Click to remove filter' : 'Click to filter by this tag'}">
-                        ${escapeHtml(tag)}
+                        ${escapeHtml(tag.name)}
                     </span>
                 `;
             }).join('');
@@ -928,7 +933,7 @@
             document.getElementById('descriptionInput').value = bookmark.description || '';
             
             clearSelectedTags();
-            bookmark.tags.forEach(tag => addSelectedTag(tag));
+            bookmark.tags.forEach(tag => addSelectedTag(tag.name));
             
             document.getElementById('bookmarkModal').style.display = 'block';
             hideTagDropdown();

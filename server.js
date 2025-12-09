@@ -122,7 +122,7 @@ function transformIssue(issue) {
         title: issue.title,
         link: link,
         description: description,
-        tags: issue.labels.map(label => label.name),
+        tags: issue.labels.map(label => ({ name: label.name, color: label.color })),
         created: issue.created_at,
         updated: issue.updated_at,
         state: issue.state,
@@ -180,6 +180,23 @@ async function fetchAllLabels(forceRefresh = false) {
     } catch (err) {
         console.error('Error fetching labels:', err.message);
         return labelsCache; // return cached if available
+    }
+}
+
+// Helper to update labels cache from issue labels
+function updateLabelsCache(labels) {
+    if (!labels || !Array.isArray(labels)) return;
+    
+    let cacheUpdated = false;
+    labels.forEach(label => {
+        if (!labelsCache.some(l => l.name === label.name)) {
+            labelsCache.push({ name: label.name, color: label.color });
+            cacheUpdated = true;
+        }
+    });
+    
+    if (cacheUpdated) {
+        labelsCache.sort((a, b) => a.name.localeCompare(b.name));
     }
 }
 
@@ -246,6 +263,7 @@ Tags: ${tags ? tags.join(' ') : ''}`;
         
         // Update cache
         issuesCache.unshift(bookmark);
+        updateLabelsCache(newIssue.labels);
         
         res.status(201).json(bookmark);
     } catch (error) {
@@ -287,6 +305,7 @@ Tags: ${tags ? tags.join(' ') : ''}`;
         if (index !== -1) {
             issuesCache[index] = bookmark;
         }
+        updateLabelsCache(updatedIssue.labels);
         
         res.json(bookmark);
     } catch (error) {
