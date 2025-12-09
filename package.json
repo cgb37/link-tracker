@@ -9,7 +9,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js --dev",
-    "stop": "lsof -ti:3333 | xargs kill || echo 'No running instances found'",
+    "stop": "./bin/stop-service.sh",
+    "start:service": "./bin/start-service.sh",
+    "restart:service": "./bin/restart-service.sh",
     "restart": "npm run stop && sleep 1 && npm start",
     "migrate": "node migrate-data.js"
   },
